@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login | Mini Issue Tracker</title>
+    <link rel="stylesheet" href="/styles/main.css" />
+</head>
+<body class="auth-page">
+    <main class="auth-shell">
+        <section class="auth-hero">
+            <div class="eyebrow">Mini Issue Tracker</div>
+            <h1>Track work without losing the details.</h1>
+            <p class="hero-copy">Review your queue, assign owners, update issue status, and manage comments from a clearer workspace.</p>
+            <ul class="feature-list">
+                <li>See open, in-progress, and closed issues from one dashboard.</li>
+                <li>Assign work quickly and keep comment threads attached to each issue.</li>
+                <li>Use the detail page to update title, description, status, and assignee in one place.</li>
+            </ul>
+        </section>
+
+        <section class="auth-panel">
+            <h2>Welcome back</h2>
+            <p>Sign in to continue to your dashboard.</p>
+
+            <form id="loginForm" class="form-grid">
+                <div class="field">
+                    <label for="email">Email</label>
+                    <input class="input" id="email" type="email" name="email" placeholder="you@example.com" required />
+                </div>
+
+                <div class="field">
+                    <label for="password">Password</label>
+                    <input class="input" id="password" type="password" name="password" placeholder="Enter your password" required />
+                </div>
+
+                <div class="button-row">
+                    <button class="btn btn-primary" type="submit">Login</button>
+                    <a class="btn-link btn-ghost" href="/signup">Create account</a>
+                </div>
+            </form>
+
+            <div id="message" class="message"></div>
+        </section>
+    </main>
+
+    <script>
+        function decodeTokenPayload(tokenValue) {
+            try {
+                const payload = tokenValue?.split(".")[1];
+                if (!payload) {
+                    return null;
+                }
+
+                return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function hasUsableToken(tokenValue) {
+            if (!tokenValue || tokenValue.split(".").length !== 3) {
+                return false;
+            }
+
+            const payload = decodeTokenPayload(tokenValue);
+            if (!payload) {
+                return false;
+            }
+
+            if (payload.exp && Date.now() >= payload.exp * 1000) {
+                return false;
+            }
+
+            return true;
+        }
+
+        const token = localStorage.getItem("token");
+        if (hasUsableToken(token)) {
+            window.location.href = "/dashboard";
+        } else {
+            localStorage.removeItem("token");
+            localStorage.removeItem("userName");
+        }
+
+        const form = document.getElementById("loginForm");
+        const message = document.getElementById("message");
+
+        function setMessage(text, type = "error") {
+            message.textContent = text;
+            message.className = `message${type === "success" ? " success" : ""}`;
+        }
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            setMessage("");
+
+            const formData = new FormData(form);
+            const payload = {
+                email: formData.get("email"),
+                password: formData.get("password")
+            };
+
+            try {
+                const response = await fetch("/api/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.message || "Unable to login");
+                }
+
+                localStorage.setItem("token", data.token);
+                localStorage.setItem("userName", data.name || "");
+                setMessage("Login successful. Redirecting...", "success");
+                window.location.href = "/dashboard";
+            } catch (error) {
+                setMessage(error.message);
+            }
+        });
+    </script>
+</body>
+</html>

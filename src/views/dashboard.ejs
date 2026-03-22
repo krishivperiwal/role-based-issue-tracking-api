@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard | Mini Issue Tracker</title>
+    <link rel="stylesheet" href="/styles/main.css" />
+</head>
+<body>
+    <main class="page-shell">
+        <header class="page-header">
+            <div>
+                <div class="tiny-label">Workspace overview</div>
+                <h1 class="page-title">Issue Dashboard</h1>
+                <p id="welcomeText" class="page-subtitle">See workload, search issues, and move into the detail view when something needs editing.</p>
+            </div>
+            <div class="page-header-actions">
+                <a class="btn-link btn-primary" href="/create-issue">Create Issue</a>
+                <button class="btn btn-danger" id="logoutBtn" type="button">Logout</button>
+            </div>
+        </header>
+
+        <section class="stats-grid">
+            <article class="metric-card">
+                <span class="metric-label">Visible issues</span>
+                <strong id="visibleIssueCount" class="metric-value">0</strong>
+            </article>
+            <article class="metric-card">
+                <span class="metric-label">Open</span>
+                <strong id="openCount" class="metric-value">0</strong>
+            </article>
+            <article class="metric-card">
+                <span class="metric-label">In progress</span>
+                <strong id="progressCount" class="metric-value">0</strong>
+            </article>
+            <article class="metric-card">
+                <span class="metric-label">Closed</span>
+                <strong id="closedCount" class="metric-value">0</strong>
+            </article>
+        </section>
+
+        <section class="panel">
+            <div class="toolbar">
+                <input id="searchInput" class="search-input" type="search" placeholder="Search by title, description, assignee, or creator" />
+                <select id="statusFilter" class="select">
+                    <option value="">All statuses</option>
+                    <option value="open">Open</option>
+                    <option value="in-progress">In Progress</option>
+                    <option value="closed">Closed</option>
+                </select>
+                <button class="btn btn-ghost" id="refreshBtn" type="button">Refresh</button>
+                <button class="btn btn-secondary" id="clearBtn" type="button">Clear</button>
+            </div>
+
+            <div id="message" class="message"></div>
+            <section id="issuesContainer" class="issue-grid"></section>
+        </section>
+    </main>
+
+    <script>
+        function decodeTokenPayload(tokenValue) {
+            try {
+                const payload = tokenValue?.split(".")[1];
+                if (!payload) {
+                    return null;
+                }
+
+                return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function hasUsableToken(tokenValue) {
+            if (!tokenValue || tokenValue.split(".").length !== 3) {
+                return false;
+            }
+
+            const payload = decodeTokenPayload(tokenValue);
+            if (!payload) {
+                return false;
+            }
+
+            if (payload.exp && Date.now() >= payload.exp * 1000) {
+                return false;
+            }
+
+            return true;
+        }
+
+        const token = localStorage.getItem("token");
+        if (!hasUsableToken(token)) {
+            localStorage.removeItem("token");
+            localStorage.removeItem("userName");
+            window.location.href = "/login";
+        }
+
+        const userName = localStorage.getItem("userName");
+        if (userName) {
+            document.getElementById("welcomeText").textContent = `${userName}, here is the current issue queue across your visible work.`;
+        }
+
+        const statusFilter = document.getElementById("statusFilter");
+        const searchInput = document.getElementById("searchInput");
+        const refreshBtn = document.getElementById("refreshBtn");
+        const clearBtn = document.getElementById("clearBtn");
+        const logoutBtn = document.getElementById("logoutBtn");
+        const issuesContainer = document.getElementById("issuesContainer");
+        const message = document.getElementById("message");
+        const visibleIssueCount = document.getElementById("visibleIssueCount");
+        const openCount = document.getElementById("openCount");
+        const progressCount = document.getElementById("progressCount");
+        const closedCount = document.getElementById("closedCount");
+        let allIssues = [];
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/\"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function setMessage(text, type = "error") {
+            message.textContent = text;
+            message.className = `message${type === "success" ? " success" : ""}`;
+        }
+
+        function handleUnauthorized(response) {
+            if (response.status !== 401) {
+                return false;
+            }
+
+            localStorage.removeItem("token");
+            localStorage.removeItem("userName");
+            window.location.href = "/login";
+            return true;
+        }
+
+        function getSearchableText(issue) {
+            return [
+                issue.title,
+                issue.description,
+                issue.status,
+                issue.assignedTo?.name,
+                issue.assignedTo?.email,
+                issue.createdBy?.name,
+                issue.createdBy?.email
+            ].filter(Boolean).join(" ").toLowerCase();
+        }
+
+        function updateStats(issues) {
+            visibleIssueCount.textContent = String(issues.length);
+            openCount.textContent = String(issues.filter((issue) => issue.status === "open").length);
+            progressCount.textContent = String(issues.filter((issue) => issue.status === "in-progress").length);
+            closedCount.textContent = String(issues.filter((issue) => issue.status === "closed").length);
+        }
+
+        function getFilteredIssues() {
+            const searchTerm = searchInput.value.trim().toLowerCase();
+            const selectedStatus = statusFilter.value;
+
+            return allIssues.filter((issue) => {
+                const matchesStatus = !selectedStatus || issue.status === selectedStatus;
+                const matchesSearch = !searchTerm || getSearchableText(issue).includes(searchTerm);
+                return matchesStatus && matchesSearch;
+            });
+        }
+
+        function renderIssues(issues) {
+            updateStats(issues);
+
+            if (!issues.length) {
+                issuesContainer.innerHTML = '<div class="empty-state">No issues match the current search or status filter.</div>';
+                return;
+            }
+
+            issuesContainer.innerHTML = issues.map((issue) => {
+                const statusClass = issue.status || "open";
+                const assignedTo = issue.assignedTo?.name || "Unassigned";
+                const createdBy = issue.createdBy?.name || "Unknown";
+
+                return `
+                    <article class="issue-card">
+                        <span class="badge ${statusClass}">${escapeHtml(issue.status)}</span>
+                        <h3>${escapeHtml(issue.title)}</h3>
+                        <p class="issue-description">${escapeHtml(issue.description)}</p>
+                        <div class="meta-row">
+                            <span>Assigned: ${escapeHtml(assignedTo)}</span>
+                            <span>Created by: ${escapeHtml(createdBy)}</span>
+                        </div>
+                        <div class="button-row">
+                            <a class="btn-link btn-ghost" href="/issue/${issue._id}">View details</a>
+                        </div>
+                    </article>
+                `;
+            }).join("");
+        }
+
+        function renderFilteredIssues() {
+            renderIssues(getFilteredIssues());
+        }
+
+        async function loadIssues() {
+            setMessage("");
+            issuesContainer.innerHTML = '<div class="empty-state">Loading issues...</div>';
+
+            const status = statusFilter.value;
+            const query = status ? `?status=${encodeURIComponent(status)}` : "";
+
+            try {
+                const response = await fetch(`/api/issues${query}`, {
+                    headers: {
+                        "Authorization": `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (handleUnauthorized(response)) {
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.message || "Unable to fetch issues");
+                }
+
+                allIssues = Array.isArray(data) ? data : [];
+                renderFilteredIssues();
+            } catch (error) {
+                setMessage(error.message);
+                issuesContainer.innerHTML = '<div class="empty-state">Issue data could not be loaded.</div>';
+            }
+        }
+
+        statusFilter.addEventListener("change", loadIssues);
+        searchInput.addEventListener("input", renderFilteredIssues);
+        refreshBtn.addEventListener("click", loadIssues);
+        clearBtn.addEventListener("click", () => {
+            searchInput.value = "";
+            statusFilter.value = "";
+            loadIssues();
+        });
+
+        logoutBtn.addEventListener("click", () => {
+            localStorage.removeItem("token");
+            localStorage.removeItem("userName");
+            window.location.href = "/login";
+        });
+
+        loadIssues();
+    </script>
+</body>
+</html>

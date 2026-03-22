@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create Issue | Mini Issue Tracker</title>
+    <link rel="stylesheet" href="/styles/main.css" />
+</head>
+<body>
+    <main class="page-shell">
+        <header class="page-header">
+            <div>
+                <div class="tiny-label">New issue</div>
+                <h1 class="page-title">Create a clear issue record</h1>
+                <p class="page-subtitle">Write enough context for someone else to pick this up without asking what the issue actually means.</p>
+            </div>
+            <div class="page-header-actions">
+                <a class="btn-link btn-ghost" href="/dashboard">Back to dashboard</a>
+            </div>
+        </header>
+
+        <div class="two-column">
+            <section class="panel">
+                <form id="issueForm" class="form-grid">
+                    <div class="field">
+                        <label for="title">Issue title</label>
+                        <input class="input" id="title" type="text" name="title" placeholder="Short, specific summary" required />
+                    </div>
+
+                    <div class="field">
+                        <label for="description">Description</label>
+                        <textarea class="textarea" id="description" name="description" placeholder="What happened, what should happen, and any important context" required></textarea>
+                    </div>
+
+                    <div class="button-row">
+                        <button class="btn btn-primary" type="submit">Create issue</button>
+                    </div>
+                </form>
+
+                <div id="message" class="message"></div>
+            </section>
+
+            <aside class="detail-stack">
+                <article class="panel helper-card">
+                    <div class="tiny-label">Preview</div>
+                    <h2 id="previewTitle">Your issue title will appear here</h2>
+                    <p id="previewDescription" class="helper-copy">A concise problem statement helps the dashboard stay readable and makes assignment easier.</p>
+                </article>
+
+                <article class="panel helper-card">
+                    <div class="tiny-label">Writing tips</div>
+                    <ul class="helper-list">
+                        <li>Lead with the user-visible problem or system failure.</li>
+                        <li>Include enough context for assignment and triage.</li>
+                        <li>Save implementation ideas for comments if the problem statement should stay neutral.</li>
+                    </ul>
+                </article>
+            </aside>
+        </div>
+    </main>
+
+    <script>
+        function decodeTokenPayload(tokenValue) {
+            try {
+                const payload = tokenValue?.split(".")[1];
+                if (!payload) {
+                    return null;
+                }
+
+                return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function hasUsableToken(tokenValue) {
+            if (!tokenValue || tokenValue.split(".").length !== 3) {
+                return false;
+            }
+
+            const payload = decodeTokenPayload(tokenValue);
+            if (!payload) {
+                return false;
+            }
+
+            if (payload.exp && Date.now() >= payload.exp * 1000) {
+                return false;
+            }
+
+            return true;
+        }
+
+        const token = localStorage.getItem("token");
+        if (!hasUsableToken(token)) {
+            localStorage.removeItem("token");
+            localStorage.removeItem("userName");
+            window.location.href = "/login";
+        }
+
+        const form = document.getElementById("issueForm");
+        const message = document.getElementById("message");
+        const titleInput = document.getElementById("title");
+        const descriptionInput = document.getElementById("description");
+        const previewTitle = document.getElementById("previewTitle");
+        const previewDescription = document.getElementById("previewDescription");
+
+        function setMessage(text, type = "error") {
+            message.textContent = text;
+            message.className = `message${type === "success" ? " success" : ""}`;
+        }
+
+        function handleUnauthorized(response) {
+            if (response.status !== 401) {
+                return false;
+            }
+
+            localStorage.removeItem("token");
+            localStorage.removeItem("userName");
+            window.location.href = "/login";
+            return true;
+        }
+
+        function updatePreview() {
+            previewTitle.textContent = titleInput.value.trim() || "Your issue title will appear here";
+            previewDescription.textContent = descriptionInput.value.trim() || "A concise problem statement helps the dashboard stay readable and makes assignment easier.";
+        }
+
+        titleInput.addEventListener("input", updatePreview);
+        descriptionInput.addEventListener("input", updatePreview);
+
+        form.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            setMessage("");
+
+            const formData = new FormData(form);
+            const payload = {
+                title: formData.get("title"),
+                description: formData.get("description")
+            };
+
+            try {
+                const response = await fetch("/api/issues", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (handleUnauthorized(response)) {
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.message || "Unable to create issue");
+                }
+
+                setMessage("Issue created. Redirecting...", "success");
+                window.location.href = `/issue/${data._id}`;
+            } catch (error) {
+                setMessage(error.message);
+            }
+        });
+
+        updatePreview();
+    </script>
+</body>
+</html>

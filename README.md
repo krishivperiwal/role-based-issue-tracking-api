@@ -102,7 +102,7 @@ Create a `.env` file using `.env.example`
 
 ---
 
-## � Preview
+## 📸 Preview
 
 ### Signup
 ![Signup Page](preview/signup.png)

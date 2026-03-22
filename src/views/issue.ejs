@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Issue Details | Mini Issue Tracker</title>
+    <link rel="stylesheet" href="/styles/main.css" />
+</head>
+<body>
+    <main class="page-shell">
+        <header class="page-header">
+            <div>
+                <div class="tiny-label">Issue detail</div>
+                <h1 class="page-title">Issue workspace</h1>
+                <p class="page-subtitle">Update the issue record, adjust assignment or status, and manage the discussion thread from one screen.</p>
+            </div>
+            <div class="page-header-actions">
+                <a class="btn-link btn-ghost" href="/dashboard">Back to dashboard</a>
+            </div>
+        </header>
+
+        <div id="message" class="message"></div>
+
+        <div class="two-column">
+            <section class="detail-stack">
+                <article class="panel">
+                    <div class="detail-meta">
+                        <span class="tiny-label">Issue ID</span>
+                        <span><%= issueId %></span>
+                        <span id="statusBadge" class="badge open">open</span>
+                    </div>
+                    <div class="divider"></div>
+
+                    <form id="issueForm" class="form-grid">
+                        <div class="field">
+                            <label for="issueTitleInput">Title</label>
+                            <input id="issueTitleInput" class="input" name="title" type="text" placeholder="Issue title" required />
+                        </div>
+
+                        <div class="field">
+                            <label for="issueDescriptionInput">Description</label>
+                            <textarea id="issueDescriptionInput" class="textarea" name="description" placeholder="Describe the issue" required></textarea>
+                        </div>
+
+                        <div class="field">
+                            <label for="statusSelect">Status</label>
+                            <select id="statusSelect" class="select" name="status">
+                                <option value="open">Open</option>
+                                <option value="in-progress">In Progress</option>
+                                <option value="closed">Closed</option>
+                            </select>
+                        </div>
+
+                        <div class="field">
+                            <label for="assigneeSelect">Assign to</label>
+                            <select id="assigneeSelect" class="select" name="assignedTo">
+                                <option value="">Unassigned</option>
+                            </select>
+                        </div>
+
+                        <div class="button-row">
+                            <button id="saveIssueBtn" class="btn btn-primary" type="submit">Save changes</button>
+                            <button id="resetIssueBtn" class="btn btn-secondary" type="button">Reset</button>
+                        </div>
+                    </form>
+                </article>
+
+                <article class="panel">
+                    <div class="comment-head">
+                        <div>
+                            <div class="tiny-label">Discussion</div>
+                            <h2 style="margin: 6px 0 0;">Comments</h2>
+                        </div>
+                    </div>
+                    <div id="commentsContainer" class="comment-stack"></div>
+
+                    <div class="divider"></div>
+
+                    <form id="commentForm" class="form-grid">
+                        <div class="field">
+                            <label for="commentText">Add comment</label>
+                            <textarea id="commentText" class="textarea" name="text" placeholder="Share context, blockers, or next steps" required></textarea>
+                        </div>
+                        <div class="button-row">
+                            <button class="btn btn-warm" type="submit">Post comment</button>
+                        </div>
+                    </form>
+                </article>
+            </section>
+
+            <aside class="detail-stack">
+                <article class="panel helper-card">
+                    <div class="tiny-label">Current issue</div>
+                    <h2 id="issueTitle">Loading issue...</h2>
+                    <p id="issueDescription" class="helper-copy"></p>
+                    <div id="issueMeta" class="stack"></div>
+                </article>
+
+                <article class="panel helper-card">
+                    <div class="tiny-label">Workflow notes</div>
+                    <ul class="helper-list">
+                        <li>Use status updates to reflect current execution, not final intent.</li>
+                        <li>Assign an owner only when that person can act on the issue.</li>
+                        <li>Keep comments focused on decisions, blockers, or evidence.</li>
+                    </ul>
+                </article>
+            </aside>
+        </div>
+    </main>
+
+    <script>
+        const issueId = "<%= issueId %>";
+        const token = localStorage.getItem("token");
+
+        function decodeTokenPayload(tokenValue) {
+            try {
+                const payload = tokenValue?.split(".")[1];
+                if (!payload) {
+                    return null;
+                }
+
+                return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+            } catch (error) {
+                return null;
+            }
+        }
+
+        function hasUsableToken(tokenValue) {
+            if (!tokenValue || tokenValue.split(".").length !== 3) {
+                return false;
+            }
+
+            const payload = decodeTokenPayload(tokenValue);
+            if (!payload) {
+                return false;
+            }
+
+            if (payload.exp && Date.now() >= payload.exp * 1000) {
+                return false;
+            }
+
+            return true;
+        }
+
+        if (!hasUsableToken(token)) {
+            localStorage.removeItem("token");
+            localStorage.removeItem("userName");
+            window.location.href = "/login";
+        }
+
+        const issueTitle = document.getElementById("issueTitle");
+        const issueDescription = document.getElementById("issueDescription");
+        const issueMeta = document.getElementById("issueMeta");
+        const issueForm = document.getElementById("issueForm");
+        const issueTitleInput = document.getElementById("issueTitleInput");
+        const issueDescriptionInput = document.getElementById("issueDescriptionInput");
+        const statusSelect = document.getElementById("statusSelect");
+        const statusBadge = document.getElementById("statusBadge");
+        const assigneeSelect = document.getElementById("assigneeSelect");
+        const resetIssueBtn = document.getElementById("resetIssueBtn");
+        const commentsContainer = document.getElementById("commentsContainer");
+        const commentForm = document.getElementById("commentForm");
+        const message = document.getElementById("message");
+        let loadedIssue = null;
+        let currentUser = null;
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/\"/g, "&quot;")
+                .replace(/'/g, "&#39;");
+        }
+
+        function setMessage(text, type = "error") {
+            message.textContent = text;
+            message.className = `message${type === "success" ? " success" : ""}`;
+        }
+
+        function handleUnauthorized(response) {
+            if (response.status !== 401) {
+                return false;
+            }
+
+            localStorage.removeItem("token");
+            localStorage.removeItem("userName");
+            window.location.href = "/login";
+            return true;
+        }
+
+        function formatDate(value) {
+            if (!value) {
+                return "Unknown";
+            }
+
+            const parsed = new Date(value);
+            if (Number.isNaN(parsed.getTime())) {
+                return "Unknown";
+            }
+
+            return parsed.toLocaleString();
+        }
+
+        function canDeleteComment(comment) {
+            if (!currentUser) {
+                return true;
+            }
+
+            return currentUser.role === "admin" || currentUser.id === comment.createdBy?._id;
+        }
+
+        function populateIssueForm(issue) {
+            issueTitleInput.value = issue.title || "";
+            issueDescriptionInput.value = issue.description || "";
+            statusSelect.value = issue.status || "open";
+            assigneeSelect.value = issue.assignedTo?._id || "";
+            statusBadge.className = `badge ${issue.status || "open"}`;
+            statusBadge.textContent = issue.status || "open";
+        }
+
+        function renderIssueSummary(issue) {
+            issueTitle.textContent = issue.title;
+            issueDescription.textContent = issue.description;
+            issueMeta.innerHTML = `
+                <div class="detail-meta"><span>Status</span><strong>${escapeHtml(issue.status)}</strong></div>
+                <div class="detail-meta"><span>Assigned to</span><strong>${escapeHtml(issue.assignedTo?.name || "Unassigned")}</strong></div>
+                <div class="detail-meta"><span>Created by</span><strong>${escapeHtml(issue.createdBy?.name || "Unknown")}</strong></div>
+                <div class="detail-meta"><span>Updated</span><strong>${escapeHtml(formatDate(issue.updatedAt))}</strong></div>
+            `;
+        }
+
+        async function loadIssue() {
+            setMessage("");
+
+            try {
+                const response = await fetch("/api/issues", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (handleUnauthorized(response)) {
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.message || "Unable to fetch issue");
+                }
+
+                const issue = Array.isArray(data) ? data.find((item) => item._id === issueId) : null;
+
+                if (!issue) {
+                    issueTitle.textContent = "Issue not found";
+                    issueDescription.textContent = "This issue is either unavailable or you do not have access.";
+                    issueForm.classList.add("hidden");
+                    return;
+                }
+
+                loadedIssue = issue;
+                populateIssueForm(issue);
+                renderIssueSummary(issue);
+            } catch (error) {
+                setMessage(error.message);
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const response = await fetch("/api/auth/users", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (handleUnauthorized(response)) {
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.message || "Unable to fetch users");
+                }
+
+                const options = ['<option value="">Unassigned</option>'];
+                for (const user of data) {
+                    options.push(`<option value="${user._id}">${escapeHtml(user.name)} (${escapeHtml(user.email)})</option>`);
+                }
+
+                assigneeSelect.innerHTML = options.join("");
+
+                if (loadedIssue?.assignedTo?._id) {
+                    assigneeSelect.value = loadedIssue.assignedTo._id;
+                }
+            } catch (error) {
+                setMessage(error.message);
+            }
+        }
+
+        async function loadComments() {
+            try {
+                const response = await fetch(`/api/issues/${issueId}/comments`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                if (handleUnauthorized(response)) {
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.message || "Unable to fetch comments");
+                }
+
+                if (!data.length) {
+                    commentsContainer.innerHTML = '<div class="empty-state">No comments yet. Add the first update or decision for this issue.</div>';
+                    return;
+                }
+
+                commentsContainer.innerHTML = data.map((comment) => {
+                    const author = comment.createdBy?.name || "Unknown";
+                    const deleteButton = canDeleteComment(comment)
+                        ? `<button class="btn btn-danger delete-btn" type="button" data-comment-id="${comment._id}">Delete</button>`
+                        : "";
+
+                    return `
+                        <article class="comment-card">
+                            <div class="comment-head">
+                                <div>
+                                    <strong>${escapeHtml(author)}</strong>
+                                    <div class="comment-meta">${escapeHtml(formatDate(comment.createdAt))}</div>
+                                </div>
+                                ${deleteButton}
+                            </div>
+                            <p class="comment-text">${escapeHtml(comment.text)}</p>
+                        </article>
+                    `;
+                }).join("");
+            } catch (error) {
+                setMessage(error.message);
+            }
+        }
+
+        issueForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            setMessage("");
+
+            try {
+                const response = await fetch(`/api/issues/${issueId}`, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        title: issueTitleInput.value,
+                        description: issueDescriptionInput.value,
+                        status: statusSelect.value,
+                        assignedTo: assigneeSelect.value
+                    })
+                });
+
+                const data = await response.json();
+
+                if (handleUnauthorized(response)) {
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.message || "Unable to update issue");
+                }
+
+                setMessage("Issue updated successfully.", "success");
+                loadedIssue = data;
+                populateIssueForm(data);
+                renderIssueSummary(data);
+            } catch (error) {
+                setMessage(error.message);
+            }
+        });
+
+        resetIssueBtn.addEventListener("click", () => {
+            if (loadedIssue) {
+                populateIssueForm(loadedIssue);
+                setMessage("");
+            }
+        });
+
+        commentForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            setMessage("");
+
+            const formData = new FormData(commentForm);
+            const payload = { text: formData.get("text") };
+
+            try {
+                const response = await fetch(`/api/issues/${issueId}/comments`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (handleUnauthorized(response)) {
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.message || "Unable to add comment");
+                }
+
+                commentForm.reset();
+                setMessage("Comment added.", "success");
+                await loadComments();
+            } catch (error) {
+                setMessage(error.message);
+            }
+        });
+
+        commentsContainer.addEventListener("click", async (event) => {
+            const button = event.target.closest(".delete-btn");
+            if (!button) {
+                return;
+            }
+
+            const commentId = button.getAttribute("data-comment-id");
+            if (!commentId) {
+                return;
+            }
+
+            setMessage("");
+
+            try {
+                const response = await fetch(`/api/issues/comments/${commentId}`, {
+                    method: "DELETE",
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+
+                if (handleUnauthorized(response)) {
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(data.message || "Unable to delete comment");
+                }
+
+                setMessage("Comment deleted.", "success");
+                await loadComments();
+            } catch (error) {
+                setMessage(error.message);
+            }
+        });
+
+        async function initPage() {
+            currentUser = decodeTokenPayload(token);
+            await loadIssue();
+            await loadUsers();
+            await loadComments();
+        }
+
+        initPage();
+    </script>
+</body>
+</html>
