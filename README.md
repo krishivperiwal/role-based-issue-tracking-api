@@ -1,29 +1,36 @@
 # 🛠 Role-Based Issue Tracking API
 
-A production-style backend system for managing issues with role-based access control, permissions, and comment tracking.
+A production-style backend system for managing issues with role-based access control, permissions, and collaborative comment tracking.
 
 ---
 
 ## ❗ Problem
 
-Managing issues or bugs across teams becomes unstructured without a centralized system.
+Managing issues across teams becomes inefficient without structured tracking and proper access control.
 
-This API provides a secure and structured backend solution to create, assign, update, and track issues with proper access control and collaboration features.
+This system provides a secure backend solution to create, assign, update, and track issues while enforcing role-based permissions and collaboration through comments.
 
 ---
 
 ## 🔗 Key Features
 
-* 🔐 JWT-based Authentication with secure password hashing (bcrypt)
+* 🔐 JWT Authentication with secure password hashing (bcrypt)
 * 🧑‍💼 Role-Based Access Control (RBAC) for users and admins
-* 🛡 Permission-based issue modification (creator/assignee control)
-* 📋 Full CRUD operations for issues
-* 🔄 Issue lifecycle management (open, in-progress, closed)
+* 🛡 Permission-based issue modification (creator & assignee control)
+* 📋 Full CRUD operations for issue management
+* 🔄 Issue lifecycle tracking (open, in-progress, closed)
 * 👥 Issue assignment system
 * 💬 Comment system linked to issues
-* ⚡ Filtering by status and user
-* 🚀 Optimized queries using MongoDB indexing
+* 🔍 Filtering issues by status and user
+* ⚡ Optimized queries using MongoDB indexing
 * 🛠 Centralized error handling with custom error class
+* 🚀 Clean modular backend architecture
+
+---
+
+## 📸 Preview
+
+![Dashboard](./public/screenshot.png)
 
 ---
 
@@ -44,8 +51,8 @@ Follows a modular backend architecture:
 * Controllers → Business logic
 * Models → Database schemas
 * Routes → API endpoints
-* Middleware → Auth, Roles, Permissions, Errors
-* Utils → Async handler & custom error class
+* Middleware → Auth, Roles, Permissions, Error Handling
+* Utils → Async wrapper & custom error class
 
 ---
 
@@ -93,7 +100,7 @@ GET /api/issues
 
 ```bash
 git clone <your-repo-link>
-cd mini-issue-tracker
+cd role-based-issue-tracking-api
 npm install
 npm run start
 ```
@@ -121,7 +128,7 @@ Create a `.env` file using `.env.example`
 
 ---
 
-## �📌 API Base URL
+## 📌 API Base URL
 
 http://localhost:5000/api
 
@@ -130,4 +137,3 @@ http://localhost:5000/api
 ## 👨‍💻 Author
 
 Krishiv
-
