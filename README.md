@@ -8,7 +8,7 @@ A production-style backend system for managing issues with role-based access con
 
 Managing issues across teams becomes inefficient without structured tracking and proper access control.
 
-This system provides a secure backend solution to create, assign, update, and track issues while enforcing role-based permissions and collaboration through comments.
+This API provides a scalable and secure backend solution to create, assign, update, and track issues while enforcing role-based permissions and enabling collaboration through comments.
 
 ---
 
@@ -26,13 +26,7 @@ This system provides a secure backend solution to create, assign, update, and tr
 * 🛠 Centralized error handling with custom error class
 * 🚀 Clean modular backend architecture
 * 🔐 Secure API with authentication and authorization middleware
-
----
-
-## 📸 Preview
-
-![Dashboard](./public/screenshot.png)
-
+* 
 ---
 
 ## ⚙️ Tech Stack
