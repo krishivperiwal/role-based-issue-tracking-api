@@ -25,6 +25,7 @@ This system provides a secure backend solution to create, assign, update, and tr
 * ⚡ Optimized queries using MongoDB indexing
 * 🛠 Centralized error handling with custom error class
 * 🚀 Clean modular backend architecture
+* 🔐 Secure API with authentication and authorization middleware
 
 ---
 
