@@ -5,13 +5,13 @@ import AppError from "../utils/appError.js";
 
 const generateToken = (user) => {
   return jwt.sign(
-    { id: user._id, role: user.role },
+    { id: user._id, email: user.email, role: user.role },
     process.env.JWT_SECRET,
     { expiresIn: "7d" }
   );
 };
 
-export const signup = asyncHandler(async (req, res, next) => {
+export const registerUser = asyncHandler(async (req, res, next) => {
   const { name, email, password } = req.body || {};
 
   if (!name || !email || !password) {
@@ -19,7 +19,6 @@ export const signup = asyncHandler(async (req, res, next) => {
   }
 
   const userExists = await User.findOne({ email });
-
   if (userExists) {
     throw new AppError("User already exists", 400);
   }
@@ -27,18 +26,18 @@ export const signup = asyncHandler(async (req, res, next) => {
   const user = await User.create({
     name,
     email,
-    password,
+    password
   });
 
   res.status(201).json({
     _id: user._id,
     name: user.name,
     email: user.email,
-    token: generateToken(user),
+    token: generateToken(user)
   });
 });
 
-export const login = asyncHandler(async (req, res, next) => {
+export const loginUser = asyncHandler(async (req, res, next) => {
   const { email, password } = req.body || {};
 
   if (!email || !password) {

@@ -4,51 +4,52 @@ import asyncHandler from "../utils/asyncHandler.js";
 import AppError from "../utils/appError.js";
 
 export const addComment = asyncHandler(async (req, res, next) => {
+  const { text } = req.body;
+  const { issueId } = req.params;
 
-    const { text } = req.body;
-    const { issueId } = req.params;
+  if (!text) {
+    return next(new AppError("Comment text is required", 400));
+  }
 
-    if (!text) {
-        return next(new AppError("Comment text is required", 400));
-    }
+  const issue = await Issue.findById(issueId);
+  if (!issue) {
+    return next(new AppError("Issue not found", 404));
+  }
 
-    const issue = await Issue.findById(issueId);
+  const comment = await Comment.create({
+    text,
+    issue: issueId,
+    createdBy: req.user._id
+  });
 
-    if (!issue) {
-        return next(new AppError("Issue not found", 404));
-    }
-
-    const comment = await Comment.create({
-        text,
-        issue: issueId,
-        createdBy: req.user._id,
-    });
-
-    res.status(201).json(comment);
+  res.status(201).json(comment);
 });
 
 export const getIssueComments = asyncHandler(async (req, res, next) => {
+  const { issueId } = req.params;
 
-    const { issueId } = req.params;
+  const comments = await Comment.find({ issue: issueId })
+    .populate("createdBy", "name email")
+    .sort({ createdAt: -1 });
 
-    const comments = await Comment.find({ issue: issueId })
-        .populate("createdBy", "name email")
-        .sort({ createdAt: -1 });
-
-    res.status(200).json(comments);
+  res.status(200).json(comments);
 });
 
 export const deleteComment = asyncHandler(async (req, res, next) => {
+  const { commentId } = req.params;
 
-    const { commentId } = req.params;
+  const comment = await Comment.findById(commentId);
+  if (!comment) {
+    throw new AppError("Comment not found", 404);
+  }
 
-    const comment = await Comment.findById(commentId);
+  const isOwner = comment.createdBy.toString() === req.user._id.toString();
+  const isAdmin = req.user.role === "admin";
 
-    if (!comment) {
-        return next(new AppError("Comment not found", 404));
-    }
+  if (!isOwner && !isAdmin) {
+    throw new AppError("Not authorized to delete this comment", 403);
+  }
 
-    await comment.deleteOne();
-
-    res.status(200).json({ message: "Comment deleted successfully" });
+  await comment.deleteOne();
+  res.status(200).json({ message: "Comment deleted successfully" });
 });
