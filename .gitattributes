@@ -1,0 +1,4 @@
+*.ejs linguist-detectable=false
+*.css linguist-detectable=false
+git commit -m "exclude EJS and CSS from language detection"
+git push
