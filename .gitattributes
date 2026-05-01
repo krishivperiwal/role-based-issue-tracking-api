@@ -1,0 +1,5 @@
+# Exclude EJS template files from GitHub language detection
+*.ejs linguist-detectable=false
+
+# Explicitly mark JavaScript files as the primary language
+*.js linguist-language=JavaScript
