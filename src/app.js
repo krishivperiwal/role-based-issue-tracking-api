@@ -6,8 +6,14 @@ import errorHandler from "./middlewares/errorMiddleware.js";
 import path from "path";
 import { fileURLToPath } from "url";
 import viewRoutes from "./routes/viewRoutes.js";
+import cors from 'cors';
 
 export const app = express();
+app.set('trust proxy', 1)
+app.use(cors({
+    origin: 'http://localhost:5173',
+    credentials: true
+}))
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
