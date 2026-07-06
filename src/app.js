@@ -10,10 +10,22 @@ import cors from 'cors';
 
 export const app = express();
 app.set('trust proxy', 1)
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://role-tracker-client.vercel.app'
+];
+
 app.use(cors({
-    origin: 'http://localhost:5173',
-    credentials: true
-}))
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
